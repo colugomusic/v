@@ -60,8 +60,8 @@ public:
 	}
 
 	auto slot() const { slot_(); }
-	auto& get() const { return observer_.get(); }
-	auto& operator*() const { return get(); }
+	auto get() const { return observer_.get(); }
+	auto operator*() const { return get(); }
 
 private:
 
@@ -89,8 +89,8 @@ public:
 		, connector_ { connector }
 	{}
 
-	auto& get() const { return *value_; }
-	auto& operator*() const { return get(); }
+	auto get() const { return *value_; }
+	auto operator*() const { return get(); }
 	auto observe(Slot slot) { return connector_(slot); }
 
 private:
@@ -123,7 +123,7 @@ public:
 	auto get() const { return getter_(); }
 	auto operator()() const { return get(); }
 	auto observe(Slot slot) { return connector_(slot); }
-	operator bool() const { return getter_; }
+	operator bool() const { return bool(getter_); }
 
 private:
 
@@ -136,11 +136,11 @@ class ObservableValue
 {
 public:
 
-	ObservableValue(T && value) : value_ { std::forward(value) } {}
+	ObservableValue(const T & value) : value_ { value } {}
 
 	bool operator==(const T& value) const { return value_ == value; }
 
-	auto operator=(const T& value)
+	auto& operator=(const T& value)
 	{
 		set(value);
 
@@ -161,6 +161,11 @@ public:
 		signal_();
 	}
 
+	auto observe(boost::signals2::slot<void()> slot)
+	{
+		return signal_.connect(slot);
+	}
+
 	auto observer()
 	{
 		const auto connect { [this](boost::signals2::slot<void()> slot)
@@ -173,6 +178,7 @@ public:
 
 	auto& get() const { return value_; }
 	auto& operator*() const { return get(); }
+	auto operator->() const { return &value_; }
 
 private:
 
@@ -192,6 +198,11 @@ public:
 	auto notify() -> void
 	{
 		signal_();
+	}
+
+	auto observe(boost::signals2::slot<void()> slot)
+	{
+		return signal_.connect(slot);
 	}
 
 	auto observer()
