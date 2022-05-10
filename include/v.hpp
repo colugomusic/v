@@ -71,20 +71,20 @@ private:
 };
 
 template <class T>
-class ValueObserver
+class PropertyObserver
 {
 public:
 
 	using Slot = boost::signals2::slot<void()>;
 	using Connector = std::function<boost::signals2::connection(Slot)>;
 
-	ValueObserver() = default;
-	ValueObserver(const ValueObserver& rhs) = default;
-	ValueObserver(ValueObserver && rhs) = default;
-	ValueObserver& operator=(const ValueObserver& rhs) = default;
-	ValueObserver& operator=(ValueObserver && rhs) = default;
+	PropertyObserver() = default;
+	PropertyObserver(const PropertyObserver& rhs) = default;
+	PropertyObserver(PropertyObserver && rhs) = default;
+	PropertyObserver& operator=(const PropertyObserver& rhs) = default;
+	PropertyObserver& operator=(PropertyObserver && rhs) = default;
 
-	ValueObserver(const T* value, Connector connector)
+	PropertyObserver(const T* value, Connector connector)
 		: value_ { value }
 		, connector_ { connector }
 	{}
@@ -131,12 +131,20 @@ private:
 	Connector connector_;
 };
 
+template <class T> using PropertyConnection = ValueConnection<PropertyObserver<T>>;
+template <class T> using GetterConnection = ValueConnection<GetterObserver<T>>;
+
 template <class T>
-class ObservableValue
+class Property
 {
 public:
 
-	ObservableValue(const T & value) : value_ { value } {}
+	Property(const T & value) : value_ { value } {}
+
+	Property(Property && rhs)
+		: value_ { std::move(rhs.value_) }
+		, signal_{ std::move(rhs.signal_) }
+	{}
 
 	bool operator==(const T& value) const { return value_ == value; }
 
@@ -173,7 +181,7 @@ public:
 			return signal_.connect(slot);
 		}};
 
-		return ValueObserver<T> { &value_, connect };
+		return PropertyObserver<T> { &value_, connect };
 	}
 
 	auto& get() const { return value_; }
@@ -187,13 +195,14 @@ private:
 };
 
 template <class T>
-class ObservableGetter
+class Getter
 {
 public:
 
-	using Getter = std::function<T()>;
+	using GetterFunc = std::function<T()>;
 
-	ObservableGetter(Getter getter) : getter_ { getter } {}
+	Getter() = default;
+	Getter(GetterFunc getter) : getter_ { getter } {}
 
 	auto notify() -> void
 	{
@@ -215,12 +224,13 @@ public:
 		return GetterObserver<T> { getter_, connect };
 	}
 
+	auto set(GetterFunc getter) { getter_ = getter; }
 	auto get() const { return getter_(); }
 	auto operator()() const { return get(); }
 
 private:
 
-	Getter getter_;
+	GetterFunc getter_;
 	boost::signals2::signal<void()> signal_;
 };
 
