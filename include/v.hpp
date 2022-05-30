@@ -134,19 +134,17 @@ private:
 template <class T> using PropertyConnection = ValueConnection<PropertyObserver<T>>;
 template <class T> using GetterConnection = ValueConnection<GetterObserver<T>>;
 
+template <class T> class ReadOnlyProperty;
+
 template <class T>
-class Property
+class PropertySetter
 {
 public:
 
-	Property(const T & value) : value_ { value } {}
-
-	Property(Property && rhs)
-		: value_ { std::move(rhs.value_) }
-		, signal_{ std::move(rhs.signal_) }
-	{}
-
-	bool operator==(const T& value) const { return value_ == value; }
+	PropertySetter(ReadOnlyProperty<T>* property)
+		: property_{ property }
+	{
+	}
 
 	auto& operator=(const T& value)
 	{
@@ -157,12 +155,27 @@ public:
 
 	auto set(const T& value, bool notify = true, bool force = false) -> void
 	{
-		if (value == value_ && !force) return;
-
-		value_ = value;
-
-		if (notify) this->notify();
+		property_->set(value, notify, force);
 	}
+
+private:
+
+	ReadOnlyProperty<T>* property_;
+};
+
+template <class T>
+class ReadOnlyProperty
+{
+public:
+
+	ReadOnlyProperty(const T & value) : value_ { value } {}
+
+	ReadOnlyProperty(ReadOnlyProperty<T> && rhs)
+		: value_ { std::move(rhs.value_) }
+		, signal_{ std::move(rhs.signal_) }
+	{}
+
+	bool operator==(const T& value) const { return value_ == value; }
 
 	auto notify() -> void
 	{
@@ -190,8 +203,56 @@ public:
 
 private:
 
+	auto& operator=(const T& value)
+	{
+		set(value);
+
+		return *this;
+	}
+
+	auto set(const T& value, bool notify = true, bool force = false) -> void
+	{
+		if (value == value_ && !force) return;
+
+		value_ = value;
+
+		if (notify) this->notify();
+	}
+
+	friend class PropertySetter<T>;
+
 	T value_;
 	boost::signals2::signal<void()> signal_;
+};
+
+template <class T>
+class Property : public ReadOnlyProperty<T>
+{
+public:
+
+	Property(const T & value)
+		: ReadOnlyProperty<T> { value }
+		, setter_{ this }
+	{
+	}
+
+	Property(Property && rhs) = default;
+
+	auto& operator=(const T& value)
+	{
+		setter_.operator=(value);
+
+		return *this;
+	}
+
+	auto set(const T& value, bool notify = true, bool force = false) -> void
+	{
+		setter_.set(value, notify, force);
+	}
+
+private:
+
+	PropertySetter<T> setter_;
 };
 
 template <class T>
