@@ -8,6 +8,7 @@ namespace v {
 
 template <class T> using Signal = boost::signals2::signal<T>;
 template <class T> using Slot = boost::signals2::slot<T>;
+using Connection = boost::signals2::connection;
 using ScopedConnection = boost::signals2::scoped_connection;
 
 template <class T>
@@ -146,16 +147,18 @@ public:
 	{
 	}
 
-	auto& operator=(const T& value)
+	template <class U>
+	auto& operator=(U && value)
 	{
-		set(value);
+		set(std::forward<U>(value));
 
 		return *this;
 	}
 
-	auto set(const T& value, bool notify = true, bool force = false) -> void
+	template <class U>
+	auto set(U && value, bool notify = true, bool force = false) -> void
 	{
-		property_->set(value, notify, force);
+		property_->set(std::forward<U>(value), notify, force);
 	}
 
 private:
@@ -168,7 +171,10 @@ class ReadOnlyProperty
 {
 public:
 
-	ReadOnlyProperty(const T & value) : value_ { value } {}
+	ReadOnlyProperty() : value_ {} {}
+
+	template <class U>
+	ReadOnlyProperty(U && value) : value_ { std::forward<U>(value) } {}
 
 	ReadOnlyProperty(ReadOnlyProperty<T> && rhs)
 		: value_ { std::move(rhs.value_) }
@@ -203,18 +209,20 @@ public:
 
 private:
 
-	auto& operator=(const T& value)
+	template <class U>
+	auto& operator=(U && value)
 	{
-		set(value);
+		set(std::forward<U>(value));
 
 		return *this;
 	}
 
-	auto set(const T& value, bool notify = true, bool force = false) -> void
+	template <class U>
+	auto set(U && value, bool notify = true, bool force = false) -> void
 	{
 		if (value == value_ && !force) return;
 
-		value_ = value;
+		value_ = std::forward<U>(value);
 
 		if (notify) this->notify();
 	}
@@ -230,6 +238,11 @@ class Property : public ReadOnlyProperty<T>
 {
 public:
 
+	Property()
+		: setter_{ this }
+	{
+	}
+
 	Property(const T & value)
 		: ReadOnlyProperty<T> { value }
 		, setter_{ this }
@@ -238,9 +251,10 @@ public:
 
 	Property(Property && rhs) = default;
 
-	auto& operator=(const T& value)
+	template <class U>
+	auto& operator=(U && value)
 	{
-		setter_.operator=(value);
+		setter_.operator=(std::forward<U>(value));
 
 		return *this;
 	}
@@ -253,6 +267,42 @@ public:
 private:
 
 	PropertySetter<T> setter_;
+};
+
+template <class T>
+class OneShotProperty : public Property<T>
+{
+public:
+
+	OneShotProperty(const T & value)
+		: Property<T> { value }
+	{
+	}
+
+	template <class U>
+	auto& operator=(U && value)
+	{
+		if (flag_) return *this;
+
+		Property<T>::operator=(std::forward<U>(value));
+
+		flag_ = true;
+
+		return *this;
+	}
+
+	auto set(const T& value, bool notify = true, bool force = false) -> void
+	{
+		if (flag_) return;
+
+		Property<T>::set(value, notify, force);
+
+		flag_ = true;
+	}
+
+private:
+
+	bool flag_{ false };
 };
 
 template <class T>
