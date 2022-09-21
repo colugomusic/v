@@ -142,6 +142,8 @@ class PropertySetter
 {
 public:
 
+	PropertySetter(PropertySetter && rhs) = default;
+
 	PropertySetter(ReadOnlyProperty<T>* property)
 		: property_{ property }
 	{
@@ -173,13 +175,9 @@ public:
 
 	ReadOnlyProperty() : value_ {} {}
 
-	template <class U>
-	ReadOnlyProperty(U && value) : value_ { std::forward<U>(value) } {}
+	ReadOnlyProperty(T value) : value_ { value } {}
 
-	ReadOnlyProperty(ReadOnlyProperty<T> && rhs)
-		: value_ { std::move(rhs.value_) }
-		, signal_{ std::move(rhs.signal_) }
-	{}
+	ReadOnlyProperty(ReadOnlyProperty<T> && rhs) = default;
 
 	bool operator==(const T& value) const { return value_ == value; }
 
@@ -249,7 +247,11 @@ public:
 	{
 	}
 
-	Property(Property && rhs) = default;
+	Property(Property && rhs)
+		: ReadOnlyProperty<T> { std::move(rhs) }
+		, setter_{ this }
+	{
+	}
 
 	template <class U>
 	auto& operator=(U && value)
@@ -338,6 +340,7 @@ public:
 	auto set(GetterFunc getter) { getter_ = getter; }
 	auto get() const { return getter_(); }
 	auto operator()() const { return get(); }
+	auto operator*() const { return get(); }
 
 private:
 
