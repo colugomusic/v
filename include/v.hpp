@@ -15,19 +15,36 @@ template <class T>
 struct Observable
 {
 	using Signal = v::Signal<T>;
-	using Slot = v::Slot<T>;
 
-	auto observe(Slot slot) { return signal_.connect(slot); }
+	template <typename Slot>
+	auto observe(Slot && slot) { return signal_.connect(std::forward<Slot>(slot)); }
+
+	template <typename Slot>
+	auto operator>>(Slot && slot) { return observe(std::forward<Slot>(slot)); }
 
 	template <class ... Args>
-	auto notify(Args... args) { return signal_(args...); }
+	auto notify(Args && ... args) { return signal_(std::forward<Args>(args)...); }
 
 	template <class ... Args>
-	auto operator()(Args... args) { return notify(args...); }
+	auto operator()(Args && ... args) { return notify(std::forward<Args>(args)...); }
 
 private:
 
 	Signal signal_;
+};
+
+class store
+{
+public:
+
+	auto operator+=(ScopedConnection && c) -> void
+	{
+		connections_.push_back(std::move(c));
+	}
+
+private:
+
+	std::vector<ScopedConnection> connections_;
 };
 
 template <class Observer>
@@ -92,7 +109,12 @@ public:
 
 	auto get() const { return *value_; }
 	auto operator*() const { return get(); }
-	auto observe(Slot slot) { return connector_(slot); }
+
+	template <typename Slot>
+	auto observe(Slot && slot) { return connector_(std::forward<Slot>(slot)); }
+
+	template <typename Slot>
+	auto operator>>(Slot && slot) { return observe(std::forward<Slot>(slot)); }
 
 private:
 
@@ -123,8 +145,13 @@ public:
 
 	auto get() const { return getter_(); }
 	auto operator()() const { return get(); }
-	auto observe(Slot slot) { return connector_(slot); }
 	operator bool() const { return bool(getter_); }
+
+	template <typename Slot>
+	auto observe(Slot && slot) { return connector_(std::forward<Slot>(slot)); }
+
+	template <typename Slot>
+	auto operator>>(Slot && slot) { return observe(std::forward<Slot>(slot)); }
 
 private:
 
@@ -186,10 +213,11 @@ public:
 		signal_();
 	}
 
-	auto observe(boost::signals2::slot<void()> slot)
-	{
-		return signal_.connect(slot);
-	}
+	template <typename Slot>
+	auto observe(Slot && slot) { return signal_.connect(std::forward<Slot>(slot)); }
+
+	template <typename Slot>
+	auto operator>>(Slot && slot) { return observe(std::forward<Slot>(slot)); }
 
 	auto observer()
 	{
@@ -322,10 +350,11 @@ public:
 		signal_();
 	}
 
-	auto observe(boost::signals2::slot<void()> slot)
-	{
-		return signal_.connect(slot);
-	}
+	template <typename Slot>
+	auto observe(Slot && slot) { return signal_.connect(std::forward<Slot>(slot)); }
+
+	template <typename Slot>
+	auto operator>>(Slot && slot) { return observe(std::forward<Slot>(slot)); }
 
 	auto observer()
 	{
