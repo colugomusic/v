@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <unordered_map>
 #include <boost/signals2.hpp>
 
 namespace v {
@@ -368,6 +369,103 @@ private:
 
 	getter_fn getter_;
 	boost::signals2::signal<void()> signal_;
+};
+
+class expiry_token
+{
+public:
+
+	auto expire() -> void
+	{
+		if (expired_) return;
+
+		expired_ = true;
+		signal_();
+	}
+
+	auto is_expired() const -> bool
+	{
+		return expired_;
+	}
+
+	template <typename Slot>
+	auto observe_expiry(Slot && slot)
+	{
+		return signal_ >> std::forward<Slot>(slot);
+	}
+
+private:
+
+	signal<void()> signal_;
+	bool expired_{false};
+};
+
+struct with_expiry_token
+{
+	auto get_expiry_token() -> expiry_token&
+	{
+		return token_;
+	}
+
+	auto get_expiry_token() const -> const expiry_token&
+	{
+		return token_;
+	}
+
+private:
+
+	expiry_token token_;
+};
+
+struct custom_expiry_token
+{
+	virtual auto get_expiry_token() -> expiry_token& = 0;
+	virtual auto get_expiry_token() const -> const expiry_token& = 0;
+};
+
+template <typename TokenPolicy = with_expiry_token>
+class expirable : public TokenPolicy
+{
+public:
+
+	auto expire() -> void
+	{
+		get_expiry_token().expire();
+	}
+
+	auto is_expired() const -> bool
+	{
+		return get_expiry_token().is_expired();
+	}
+
+	template <typename Slot>
+	auto observe_expiry(Slot && slot)
+	{
+		return get_expiry_token().observe_expiry(slot);
+	}
+};
+
+template <typename T>
+class attacher
+{
+public:
+
+	template <typename U>
+	auto operator<<(U* object) -> void
+	{
+		const auto on_expired = [=]()
+		{
+			attached_objects_.erase(reinterpret_cast<intptr_t>(object));
+			static_cast<T*>(this)->detach(object);
+		};
+
+		static_cast<T*>(this)->attach(object);
+		attached_objects_[reinterpret_cast<intptr_t>(object)] = object->observe_expiry(on_expired);
+	}
+
+private:
+
+	std::unordered_map<intptr_t, v::scoped_cn> attached_objects_;
 };
 
 } // v
