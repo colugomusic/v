@@ -6,16 +6,13 @@
 
 namespace v {
 
-template <class T> using Signal = boost::signals2::signal<T>;
-template <class T> using Slot = boost::signals2::slot<T>;
-using Connection = boost::signals2::connection;
-using ScopedConnection = boost::signals2::scoped_connection;
+template <class T> using slot = boost::signals2::slot<T>;
+using cn = boost::signals2::connection;
+using scoped_cn = boost::signals2::scoped_connection;
 
 template <class T>
-struct Observable
+struct signal
 {
-	using Signal = v::Signal<T>;
-
 	template <typename Slot>
 	auto observe(Slot && slot) { return signal_.connect(std::forward<Slot>(slot)); }
 
@@ -30,37 +27,37 @@ struct Observable
 
 private:
 
-	Signal signal_;
+	boost::signals2::signal<T> signal_;
 };
 
 class store
 {
 public:
 
-	auto operator+=(ScopedConnection && c) -> void
+	auto operator+=(scoped_cn && c) -> void
 	{
 		connections_.push_back(std::move(c));
 	}
 
 private:
 
-	std::vector<ScopedConnection> connections_;
+	std::vector<scoped_cn> connections_;
 };
 
 template <class Observer>
-class ValueConnection
+class value_cn
 {
 public:
 
-	using Slot = std::function<void()>;
+	using slot_t = std::function<void()>;
 
-	ValueConnection() = default;
-	ValueConnection(const ValueConnection& rhs) = default;
-	ValueConnection(ValueConnection && rhs) = default;
-	ValueConnection& operator=(const ValueConnection& rhs) = default;
-	ValueConnection& operator=(ValueConnection && rhs) = default;
+	value_cn() = default;
+	value_cn(const value_cn& rhs) = default;
+	value_cn(value_cn && rhs) = default;
+	value_cn& operator=(const value_cn& rhs) = default;
+	value_cn& operator=(value_cn && rhs) = default;
 
-	ValueConnection(Observer observer, Slot slot, bool start_disconnected = false)
+	value_cn(Observer observer, slot_t slot, bool start_disconnected = false)
 		: observer_ { observer }
 		, slot_ { slot }
 	{
@@ -84,25 +81,24 @@ public:
 private:
 
 	Observer observer_;
-	Slot slot_;
-	ScopedConnection connection_;
+	slot_t slot_;
+	scoped_cn connection_;
 };
 
 template <class T>
-class PropertyObserver
+class property_observer
 {
 public:
 
-	using Slot = boost::signals2::slot<void()>;
-	using Connector = std::function<boost::signals2::connection(Slot)>;
+	using connector_t = std::function<cn(slot<void()>)>;
 
-	PropertyObserver() = default;
-	PropertyObserver(const PropertyObserver& rhs) = default;
-	PropertyObserver(PropertyObserver && rhs) = default;
-	PropertyObserver& operator=(const PropertyObserver& rhs) = default;
-	PropertyObserver& operator=(PropertyObserver && rhs) = default;
+	property_observer() = default;
+	property_observer(const property_observer& rhs) = default;
+	property_observer(property_observer && rhs) = default;
+	property_observer& operator=(const property_observer& rhs) = default;
+	property_observer& operator=(property_observer && rhs) = default;
 
-	PropertyObserver(const T* value, Connector connector)
+	property_observer(const T* value, connector_t connector)
 		: value_ { value }
 		, connector_ { connector }
 	{}
@@ -119,25 +115,24 @@ public:
 private:
 
 	const T* value_ {};
-	Connector connector_;
+	connector_t connector_;
 };
 
 template <class T>
-class GetterObserver
+class getter_observer
 {
 public:
 
-	using Getter = std::function<T()>;
-	using Slot = boost::signals2::slot<void()>;
-	using Connector = std::function<boost::signals2::connection(Slot)>;
+	using getter_t = std::function<T()>;
+	using connector_t = std::function<cn(slot<void()>)>;
 
-	GetterObserver() = default;
-	GetterObserver(const GetterObserver& rhs) = default;
-	GetterObserver(GetterObserver && rhs) = default;
-	GetterObserver& operator=(const GetterObserver& rhs) = default;
-	GetterObserver& operator=(GetterObserver && rhs) = default;
+	getter_observer() = default;
+	getter_observer(const getter_observer& rhs) = default;
+	getter_observer(getter_observer && rhs) = default;
+	getter_observer& operator=(const getter_observer& rhs) = default;
+	getter_observer& operator=(getter_observer && rhs) = default;
 
-	GetterObserver(Getter getter, Connector connector)
+	getter_observer(getter_t getter, connector_t connector)
 		: getter_ { getter }
 		, connector_ { connector }
 	{
@@ -155,23 +150,23 @@ public:
 
 private:
 
-	Getter getter_;
-	Connector connector_;
+	getter_t getter_;
+	connector_t connector_;
 };
 
-template <class T> using PropertyConnection = ValueConnection<PropertyObserver<T>>;
-template <class T> using GetterConnection = ValueConnection<GetterObserver<T>>;
+template <class T> using property_cn = value_cn<property_observer<T>>;
+template <class T> using getter_cn = value_cn<getter_observer<T>>;
 
-template <class T> class ReadOnlyProperty;
+template <class T> class read_only_property;
 
 template <class T>
-class PropertySetter
+class property_setter
 {
 public:
 
-	PropertySetter(PropertySetter && rhs) = default;
+	property_setter(property_setter && rhs) = default;
 
-	PropertySetter(ReadOnlyProperty<T>* property)
+	property_setter(read_only_property<T>* property)
 		: property_{ property }
 	{
 	}
@@ -192,19 +187,17 @@ public:
 
 private:
 
-	ReadOnlyProperty<T>* property_;
+	read_only_property<T>* property_;
 };
 
 template <class T>
-class ReadOnlyProperty
+class read_only_property
 {
 public:
 
-	ReadOnlyProperty() : value_ {} {}
-
-	ReadOnlyProperty(T value) : value_ { value } {}
-
-	ReadOnlyProperty(ReadOnlyProperty<T> && rhs) = default;
+	read_only_property() : value_ {} {}
+	read_only_property(T value) : value_ { value } {}
+	read_only_property(read_only_property<T> && rhs) = default;
 
 	bool operator==(const T& value) const { return value_ == value; }
 
@@ -226,7 +219,7 @@ public:
 			return signal_.connect(slot);
 		}};
 
-		return PropertyObserver<T> { &value_, connect };
+		return property_observer<T> { &value_, connect };
 	}
 
 	auto& get() const { return value_; }
@@ -253,30 +246,30 @@ private:
 		if (notify) this->notify();
 	}
 
-	friend class PropertySetter<T>;
+	friend class property_setter<T>;
 
 	T value_;
 	boost::signals2::signal<void()> signal_;
 };
 
 template <class T>
-class Property : public ReadOnlyProperty<T>
+class property : public read_only_property<T>
 {
 public:
 
-	Property()
+	property()
 		: setter_{ this }
 	{
 	}
 
-	Property(const T & value)
-		: ReadOnlyProperty<T> { value }
+	property(const T & value)
+		: read_only_property<T> { value }
 		, setter_{ this }
 	{
 	}
 
-	Property(Property && rhs)
-		: ReadOnlyProperty<T> { std::move(rhs) }
+	property(property && rhs)
+		: read_only_property<T> { std::move(rhs) }
 		, setter_{ this }
 	{
 	}
@@ -296,16 +289,16 @@ public:
 
 private:
 
-	PropertySetter<T> setter_;
+	property_setter<T> setter_;
 };
 
 template <class T>
-class OneShotProperty : public Property<T>
+class one_shot_property : public property<T>
 {
 public:
 
-	OneShotProperty(const T & value)
-		: Property<T> { value }
+	one_shot_property(const T & value)
+		: property<T> { value }
 	{
 	}
 
@@ -314,7 +307,7 @@ public:
 	{
 		if (flag_) return *this;
 
-		Property<T>::operator=(std::forward<U>(value));
+		property<T>::operator=(std::forward<U>(value));
 
 		flag_ = true;
 
@@ -325,7 +318,7 @@ public:
 	{
 		if (flag_) return;
 
-		Property<T>::set(value, notify, force);
+		property<T>::set(value, notify, force);
 
 		flag_ = true;
 	}
@@ -336,14 +329,14 @@ private:
 };
 
 template <class T>
-class Getter
+class getter
 {
 public:
 
-	using GetterFunc = std::function<T()>;
+	using getter_fn = std::function<T()>;
 
-	Getter() = default;
-	Getter(GetterFunc getter) : getter_ { getter } {}
+	getter() = default;
+	getter(getter_fn getter) : getter_ { getter } {}
 
 	auto notify() -> void
 	{
@@ -363,17 +356,17 @@ public:
 			return signal_.connect(slot);
 		}};
 
-		return GetterObserver<T> { getter_, connect };
+		return getter_observer<T> { getter_, connect };
 	}
 
-	auto set(GetterFunc getter) { getter_ = getter; }
+	auto set(getter_fn getter) { getter_ = getter; }
 	auto get() const { return getter_(); }
 	auto operator()() const { return get(); }
 	auto operator*() const { return get(); }
 
 private:
 
-	GetterFunc getter_;
+	getter_fn getter_;
 	boost::signals2::signal<void()> signal_;
 };
 
