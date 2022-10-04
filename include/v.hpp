@@ -445,6 +445,9 @@ public:
 	}
 };
 
+template <typename T> struct attach { T* object; auto operator->() const { return object; } operator T*() const { return object; } };
+template <typename T> struct detach { T* object; auto operator->() const { return object; } operator T*() const { return object; } };
+
 template <typename T>
 class attacher
 {
@@ -453,17 +456,35 @@ public:
 	template <typename U>
 	auto operator<<(U* object) -> void
 	{
-		const auto on_expired = [=]()
-		{
-			attached_objects_.erase(reinterpret_cast<intptr_t>(object));
-			static_cast<T*>(this)->detach(object);
-		};
+		attach(object);
+	}
 
-		static_cast<T*>(this)->attach(object);
-		attached_objects_[reinterpret_cast<intptr_t>(object)] = object->observe_expiry(on_expired);
+	template <typename U>
+	auto operator>>(U* object) -> void
+	{
+		detach(object);
 	}
 
 private:
+
+	template <typename U>
+	auto attach(U* object) -> void
+	{
+		const auto on_expired = [=]()
+		{
+			detach(object);
+		};
+
+		static_cast<T*>(this)->update(v::attach<U>{object});
+		attached_objects_[reinterpret_cast<intptr_t>(object)] = object->observe_expiry(on_expired);
+	}
+
+	template <typename U>
+	auto detach(U* object) -> void
+	{
+		attached_objects_.erase(reinterpret_cast<intptr_t>(object));
+		static_cast<T*>(this)->update(v::detach<U>{object});
+	}
 
 	std::unordered_map<intptr_t, v::scoped_cn> attached_objects_;
 };
