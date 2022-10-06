@@ -375,6 +375,11 @@ class expiry_token
 {
 public:
 
+	~expiry_token()
+	{
+		expire();
+	}
+
 	auto expire() -> void
 	{
 		if (expired_) return;
@@ -445,8 +450,11 @@ public:
 	}
 };
 
-template <typename T> struct attach { T* object; auto operator->() const { return object; } operator T*() const { return object; } };
-template <typename T> struct detach { T* object; auto operator->() const { return object; } operator T*() const { return object; } };
+template <typename TokenPolicy, typename Slot>
+auto observe_expiry(expirable<TokenPolicy>* object, Slot && slot) { return object->observe_expiry(std::forward<Slot>(slot)); }
+
+template <typename T> struct attach { T object; auto operator->() const { return object; } operator T() const { return object; } };
+template <typename T> struct detach { T object; auto operator->() const { return object; } operator T() const { return object; } };
 
 template <typename T>
 class attacher
@@ -454,13 +462,13 @@ class attacher
 public:
 
 	template <typename U>
-	auto operator<<(U* object) -> void
+	auto operator<<(U object) -> void
 	{
 		attach(object);
 	}
 
 	template <typename U>
-	auto operator>>(U* object) -> void
+	auto operator>>(U object) -> void
 	{
 		detach(object);
 	}
@@ -468,7 +476,7 @@ public:
 private:
 
 	template <typename U>
-	auto attach(U* object) -> void
+	auto attach(U object) -> void
 	{
 		const auto on_expired = [=]()
 		{
@@ -476,17 +484,17 @@ private:
 		};
 
 		static_cast<T*>(this)->update(v::attach<U>{object});
-		attached_objects_[reinterpret_cast<intptr_t>(object)] = object->observe_expiry(on_expired);
+		attached_objects_[std::hash<U>()(object)] = observe_expiry(object, on_expired);
 	}
 
 	template <typename U>
-	auto detach(U* object) -> void
+	auto detach(U object) -> void
 	{
-		attached_objects_.erase(reinterpret_cast<intptr_t>(object));
+		attached_objects_.erase(std::hash<U>()(object));
 		static_cast<T*>(this)->update(v::detach<U>{object});
 	}
 
-	std::unordered_map<intptr_t, v::scoped_cn> attached_objects_;
+	std::unordered_map<size_t, v::scoped_cn> attached_objects_;
 };
 
 } // v
