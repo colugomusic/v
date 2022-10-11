@@ -435,18 +435,18 @@ public:
 
 	auto expire() -> void
 	{
-		get_expiry_token().expire();
+		TokenPolicy::get_expiry_token().expire();
 	}
 
 	auto is_expired() const -> bool
 	{
-		return get_expiry_token().is_expired();
+		return TokenPolicy::get_expiry_token().is_expired();
 	}
 
 	template <typename Slot>
 	auto observe_expiry(Slot && slot)
 	{
-		return get_expiry_token().observe_expiry(slot);
+		return TokenPolicy::get_expiry_token().observe_expiry(slot);
 	}
 };
 
