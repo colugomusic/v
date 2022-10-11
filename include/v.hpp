@@ -405,53 +405,62 @@ private:
 	bool expired_{false};
 };
 
-struct with_expiry_token
+class expirable
 {
-	auto get_expiry_token() -> expiry_token&
+public:
+
+	auto expire() -> void
 	{
-		return token_;
+		token_.expire();
 	}
 
-	auto get_expiry_token() const -> const expiry_token&
+	auto is_expired() const -> bool
 	{
-		return token_;
+		return token_.is_expired();
 	}
+
+	template <typename Slot>
+	auto observe_expiry(Slot && slot)
+	{
+		return token_.observe_expiry(slot);
+	}
+
+	auto get_expiry_token() -> expiry_token& { return token_; }
+	auto get_expiry_token() const -> const expiry_token& { return token_; }
 
 private:
 
 	expiry_token token_;
 };
 
-struct custom_expiry_token
-{
-	virtual auto get_expiry_token() -> expiry_token& = 0;
-	virtual auto get_expiry_token() const -> const expiry_token& = 0;
-};
-
-template <typename TokenPolicy = with_expiry_token>
-class expirable : public TokenPolicy
+class expirable_with_custom_expiry_token
 {
 public:
 
 	auto expire() -> void
 	{
-		TokenPolicy::get_expiry_token().expire();
+		get_expiry_token().expire();
 	}
 
 	auto is_expired() const -> bool
 	{
-		return TokenPolicy::get_expiry_token().is_expired();
+		return get_expiry_token().is_expired();
 	}
 
 	template <typename Slot>
 	auto observe_expiry(Slot && slot)
 	{
-		return TokenPolicy::get_expiry_token().observe_expiry(slot);
+		return get_expiry_token().observe_expiry(slot);
 	}
+
+private:
+
+	virtual auto get_expiry_token() -> expiry_token& = 0;
+	virtual auto get_expiry_token() const -> const expiry_token& = 0;
 };
 
-template <typename TokenPolicy, typename Slot>
-auto observe_expiry(expirable<TokenPolicy>* object, Slot && slot) { return object->observe_expiry(std::forward<Slot>(slot)); }
+template <typename Expirable, typename Slot>
+auto observe_expiry(Expirable* object, Slot && slot) { return object->observe_expiry(std::forward<Slot>(slot)); }
 
 template <typename T> struct attach { T object; auto operator->() const { return object; } operator T() const { return object; } };
 template <typename T> struct detach { T object; auto operator->() const { return object; } operator T() const { return object; } };
