@@ -11,8 +11,8 @@ template <class T> using slot = boost::signals2::slot<T>;
 using cn = boost::signals2::connection;
 using scoped_cn = boost::signals2::scoped_connection;
 
-template <class T>
-struct signal
+template <typename SignalType>
+struct signal_base
 {
 	template <typename Slot>
 	auto observe(Slot && slot) { return signal_.connect(std::forward<Slot>(slot)); }
@@ -28,8 +28,14 @@ struct signal
 
 private:
 
-	boost::signals2::signal<T> signal_;
+	SignalType signal_;
 };
+
+template <class T>
+using signal = signal_base<typename boost::signals2::signal_type<T, boost::signals2::keywords::mutex_type<boost::signals2::dummy_mutex>>::type>;
+
+template <class T>
+using mt_signal = signal_base<boost::signals2::signal<T>>;
 
 class store
 {
