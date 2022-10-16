@@ -11,6 +11,8 @@ template <class T> using slot = boost::signals2::slot<T>;
 using cn = boost::signals2::connection;
 using scoped_cn = boost::signals2::scoped_connection;
 
+namespace detail {
+
 template <typename SignalType>
 struct signal_base
 {
@@ -32,10 +34,12 @@ private:
 };
 
 template <class T>
-using signal = signal_base<typename boost::signals2::signal_type<T, boost::signals2::keywords::mutex_type<boost::signals2::dummy_mutex>>::type>;
+using boost_signal = typename boost::signals2::signal_type<T, boost::signals2::keywords::mutex_type<boost::signals2::dummy_mutex>>::type;
 
 template <class T>
-using mt_signal = signal_base<boost::signals2::signal<T>>;
+using boost_mt_signal = boost::signals2::signal<T>;
+
+} // detail
 
 class store
 {
@@ -164,16 +168,19 @@ private:
 template <class T> using property_cn = value_cn<property_observer<T>>;
 template <class T> using getter_cn = value_cn<getter_observer<T>>;
 
-template <class T> class read_only_property;
+namespace detail {
 
-template <class T>
-class property_setter
+template <class T, class SignalType>
+class read_only_property_base;
+
+template <class T, class SignalType>
+class property_setter_base
 {
 public:
 
-	property_setter(property_setter && rhs) = default;
+	property_setter_base(property_setter_base && rhs) = default;
 
-	property_setter(read_only_property<T>* property)
+	property_setter_base(read_only_property_base<T, SignalType>* property)
 		: property_{ property }
 	{
 	}
@@ -194,17 +201,17 @@ public:
 
 private:
 
-	read_only_property<T>* property_;
+	read_only_property_base<T, SignalType>* property_;
 };
 
-template <class T>
-class read_only_property
+template <class T, class SignalType>
+class read_only_property_base
 {
 public:
 
-	read_only_property() : value_ {} {}
-	read_only_property(T value) : value_ { value } {}
-	read_only_property(read_only_property<T> && rhs) = default;
+	read_only_property_base() : value_ {} {}
+	read_only_property_base(T value) : value_ { value } {}
+	read_only_property_base(read_only_property_base<T, SignalType> && rhs) = default;
 
 	bool operator==(const T& value) const { return value_ == value; }
 
@@ -221,7 +228,7 @@ public:
 
 	auto observer()
 	{
-		const auto connect { [this](boost::signals2::slot<void()> slot)
+		const auto connect { [this](v::slot<void()> slot)
 		{
 			return signal_.connect(slot);
 		}};
@@ -253,30 +260,30 @@ private:
 		if (notify) this->notify();
 	}
 
-	friend class property_setter<T>;
+	friend class property_setter_base<T, SignalType>;
 
 	T value_;
-	boost::signals2::signal<void()> signal_;
+	SignalType signal_;
 };
 
-template <class T>
-class property : public read_only_property<T>
+template <class T, class SignalType>
+class property_base : public read_only_property_base<T, SignalType>
 {
 public:
 
-	property()
+	property_base()
 		: setter_{ this }
 	{
 	}
 
-	property(const T & value)
-		: read_only_property<T> { value }
+	property_base(const T & value)
+		: read_only_property_base<T, SignalType> { value }
 		, setter_{ this }
 	{
 	}
 
-	property(property && rhs)
-		: read_only_property<T> { std::move(rhs) }
+	property_base(property_base && rhs)
+		: read_only_property_base<T, SignalType> { std::move(rhs) }
 		, setter_{ this }
 	{
 	}
@@ -296,16 +303,16 @@ public:
 
 private:
 
-	property_setter<T> setter_;
+	property_setter_base<T, SignalType> setter_;
 };
 
-template <class T>
-class one_shot_property : public property<T>
+template <class T, class SignalType>
+class one_shot_property_base : public property_base<T, SignalType>
 {
 public:
 
-	one_shot_property(const T & value)
-		: property<T> { value }
+	one_shot_property_base(const T & value)
+		: property<T, SignalType> { value }
 	{
 	}
 
@@ -314,7 +321,7 @@ public:
 	{
 		if (flag_) return *this;
 
-		property<T>::operator=(std::forward<U>(value));
+		property<T, SignalType>::operator=(std::forward<U>(value));
 
 		flag_ = true;
 
@@ -325,7 +332,7 @@ public:
 	{
 		if (flag_) return;
 
-		property<T>::set(value, notify, force);
+		property<T, SignalType>::set(value, notify, force);
 
 		flag_ = true;
 	}
@@ -335,15 +342,15 @@ private:
 	bool flag_{ false };
 };
 
-template <class T>
-class getter
+template <class T, class SignalType>
+class getter_base
 {
 public:
 
 	using getter_fn = std::function<T()>;
 
-	getter() = default;
-	getter(getter_fn getter) : getter_ { getter } {}
+	getter_base() = default;
+	getter_base(getter_fn getter) : getter_ { getter } {}
 
 	auto notify() -> void
 	{
@@ -358,7 +365,7 @@ public:
 
 	auto observer()
 	{
-		const auto connect { [this](boost::signals2::slot<void()> slot)
+		const auto connect { [this](v::slot<void()> slot)
 		{
 			return signal_.connect(slot);
 		}};
@@ -374,8 +381,26 @@ public:
 private:
 
 	getter_fn getter_;
-	boost::signals2::signal<void()> signal_;
+	SignalType signal_;
 };
+
+} // detail
+
+template <typename T> using getter = detail::getter_base<T, detail::boost_signal<void()>>;
+template <typename T> using property = detail::property_base<T, detail::boost_signal<void()>>;
+template <typename T> using property_setter = detail::property_setter_base<T, detail::boost_signal<void()>>;
+template <typename T> using read_only_property = detail::read_only_property_base<T, detail::boost_signal<void()>>;
+template <typename T> using signal = detail::signal_base<detail::boost_signal<T>>;
+
+namespace mt {
+
+template <typename T> using mt_getter = detail::getter_base<T, detail::boost_mt_signal<void()>>;
+template <typename T> using mt_property = detail::property_base<T, detail::boost_mt_signal<void()>>;
+template <typename T> using mt_property_setter = detail::property_setter_base<T, detail::boost_mt_signal<void()>>;
+template <typename T> using mt_read_only_property = detail::read_only_property_base<T, detail::boost_mt_signal<void()>>;
+template <typename T> using mt_signal = detail::signal_base<detail::boost_mt_signal<T>>;
+
+} // mt
 
 class expiry_token
 {
