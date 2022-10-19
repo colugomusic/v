@@ -312,7 +312,7 @@ class one_shot_property_base : public property_base<T, SignalType>
 public:
 
 	one_shot_property_base(const T & value)
-		: property<T, SignalType> { value }
+		: property_base<T, SignalType> { value }
 	{
 	}
 
@@ -321,7 +321,7 @@ public:
 	{
 		if (flag_) return *this;
 
-		property<T, SignalType>::operator=(std::forward<U>(value));
+		property_base<T, SignalType>::operator=(std::forward<U>(value));
 
 		flag_ = true;
 
@@ -332,7 +332,7 @@ public:
 	{
 		if (flag_) return;
 
-		property<T, SignalType>::set(value, notify, force);
+		property_base<T, SignalType>::set(value, notify, force);
 
 		flag_ = true;
 	}
